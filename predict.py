@@ -1,6 +1,9 @@
 from cog import BasePredictor, Input, Path
 import nemo.collections.asr as nemo_asr
 import soundfile as sf
+import subprocess
+import os
+import uuid
 
 class Predictor(BasePredictor):
     def setup(self) -> None:
@@ -12,7 +15,20 @@ class Predictor(BasePredictor):
         file: Path = Input(description="Audio file"),
     ) -> str:
         """Run a single prediction on the model"""
-        audio_signal, sample_rate = sf.read(file)
-        assert sample_rate == 16000, "Sample rate must be 16kHz!"
-        transcriptions = self.model.transcribe(paths2audio_files=[str(file)])
+        os.makedirs("/tmp/outputs", exist_ok=True)
+
+        output_path = f"/tmp/outputs/{str(uuid.uuid4())}.wav"
+        # Convert to 16kHz
+        command = [
+            'ffmpeg',
+            '-i', str(file), # Input file
+            '-ac', '1', # Set audio channels to 1 (mono)
+            '-ar', '16000',  # Set audio sample rate to 16000 Hz
+            '-y',  # Overwrite output file if it exists
+            output_path
+        ]
+        subprocess.run(command, check=True)
+
+        transcriptions = self.model.transcribe(paths2audio_files=[output_path])
+        os.remove(output_path)
         return transcriptions[0]
